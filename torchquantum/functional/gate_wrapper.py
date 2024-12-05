@@ -371,7 +371,7 @@ def gate_wrapper(
                 # this is for directly inputting parameters as a number
                 params = torch.tensor(params, dtype=F_DTYPE)
         '''
-        Check whether user don't set parameters of multi parameters gate 
+        Check whether user don't set parameters of multi parameters gate
         in batch mode.
         '''
         if params.dim() == 1 and params.shape[0] == paramnum:
@@ -441,8 +441,7 @@ def gate_wrapper(
                 matrix = matrix.permute(0, 2, 1)
             else:
                 matrix = matrix.permute(1, 0)
-        assert np.log2(matrix.shape[-1]) == len(wires)
-        
+
         # TODO: There might be a better way to discriminate noisedevice and normal statevector device
         if q_device.device_name == "noisedevice":
             density = q_device.densities
@@ -463,6 +462,17 @@ def gate_wrapper(
                         density_noise = density_noise + apply_unitary_density_bmm(density, noise_mat, wires)
                     density = p_identity * density + density_noise
                 q_device.densities = apply_unitary_density_bmm(density, matrix, wires)
+        elif q_device.device_name == "looplesstn":
+            state = q_device._states
+            if isinstance(wires, str):
+                wires = (wires, )
+            if len(wires)==1:
+                state.apply_one_site_operator(*wires, matrix)
+            elif len(wires) == 2:
+                state.apply_two_sites_operator(*wires, matrix, iso_movement=False)
+            else:
+                state.apply_mpo(wires, matrix)
+            q_device._states = state
         else:
             state = q_device.states
             if method == "einsum":

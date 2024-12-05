@@ -42,6 +42,7 @@ class QuantumDevice(nn.Module):
         bsz: int = 1,
         device: Union[torch.device, str] = "cpu",
         record_op: bool = False,
+        initial_state = None
     ):
         """A quantum device that contains the quantum state vector.
         Args:
@@ -61,9 +62,12 @@ class QuantumDevice(nn.Module):
         self.bsz = bsz
         self.device = device
 
-        _state = torch.zeros(2**self.n_wires, dtype=C_DTYPE)
-        _state[0] = 1 + 0j  # type: ignore
-        _state = torch.reshape(_state, [2] * self.n_wires).to(self.device)
+        if initial_state is None:
+            _state = torch.zeros(2**self.n_wires, dtype=C_DTYPE)
+            _state[0] = 1 + 0j  # type: ignore
+            _state = torch.reshape(_state, [2] * self.n_wires).to(self.device)
+        else:
+            _state = torch.reshape(initial_state, [2] * self.n_wires).to(self.device)
         self.register_buffer("state", _state)
 
         repeat_times = [bsz] + [1] * len(self.state.shape)  # type: ignore

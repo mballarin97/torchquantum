@@ -53,6 +53,7 @@ from .u2 import U2, CU2
 from .u3 import U3, CU3, CU, U
 from .xx_min_yy import XXMINYY
 from .xx_plus_yy import XXPLUSYY
+from .sun import SU2, SU4
 
 _all_variables = [
     EchoedCrossResonance,
@@ -101,6 +102,8 @@ _all_variables = [
     RCCX,
     S,
     SDG,
+    SU2,
+    SU4,
     CS,
     CSDG,
     SingleExcitation,
@@ -150,6 +153,8 @@ op_name_dict.update(
         "p": U1,
         "cp": CU1,
         "cr": CU1,
+        "su2": SU2,
+        "su4": SU4
     }
 )
 

@@ -93,6 +93,7 @@ from .s import _s_mat_dict, s, sdg, cs, csdg
 from .t import _t_mat_dict, t, tdg
 from .swap import _swap_mat_dict, swap, sswap, iswap, cswap
 from .ecr import _ecr_mat_dict, ecr, echoedcrossresonance
+from .sun import su2, su4, su2_matrix, su4_matrix, _sun_mat_dict
 
 mat_dict = {
     **_hadamard_mat_dict,
@@ -120,6 +121,7 @@ mat_dict = {
     **_t_mat_dict,
     **_swap_mat_dict,
     **_ecr_mat_dict,
+    **_sun_mat_dict,
 }
 
 func_name_dict = {
@@ -207,6 +209,8 @@ func_name_dict = {
     "rccx": rccx,
     "rc3x": rc3x,
     "c4x": c4x,
+    "su2": su2,
+    "su4": su4,
 }
 
 from .func_mat_exp import matrix_exp
