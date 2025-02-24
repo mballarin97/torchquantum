@@ -463,16 +463,13 @@ def gate_wrapper(
                     density = p_identity * density + density_noise
                 q_device.densities = apply_unitary_density_bmm(density, matrix, wires)
         elif q_device.device_name == "looplesstn":
-            state = q_device._states
             if isinstance(wires, str):
                 wires = (wires, )
             if len(wires)==1:
-                state.apply_one_site_operator(*wires, matrix)
+                q_device.apply_one_site_operator(*wires, matrix)
             elif len(wires) == 2:
-                state.apply_two_sites_operator(*wires, matrix, iso_movement=False)
-            else:
-                state.apply_mpo(wires, matrix)
-            q_device._states = state
+                q_device.apply_two_sites_operator(*wires, matrix)
+
         else:
             state = q_device.states
             if method == "einsum":
