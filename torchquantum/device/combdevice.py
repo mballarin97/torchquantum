@@ -339,20 +339,20 @@ class CombTNDevice(nn.Module):
             ).permute(0, 1, 3, 2)
         else:
             if idx < jdx:
-                #qq, rr = torch.linalg.qr(it.reshape(-1, it.shape[-1]))
-                qq, ss, vv, _ = svd_decomposition(it.reshape(-1, it.shape[-1]))
-                rr = torch.diag(ss) @ vv
+                qq, rr = torch.linalg.qr(it.reshape(-1, it.shape[-1]))
+                #qq, ss, vv, _ = svd_decomposition(it.reshape(-1, it.shape[-1]))
+                #rr = torch.diag(ss) @ vv
                 self[idx] = qq.reshape(*it.shape[:-1], -1)
                 self[jdx] = torch.tensordot(
                     rr, jt, ([1], [0])
                 )
             else:
-                #qq, rr = torch.linalg.qr(it.reshape(it.shape[0], -1).T )
-                uu, ss, qq, _ = svd_decomposition(it.reshape(it.shape[0], -1))
-                rr = uu @ torch.diag(ss)
-                self[idx] = qq.reshape(-1, *it.shape[1:] )
+                qq, rr = torch.linalg.qr(it.reshape(it.shape[0], -1).T )
+                #uu, ss, qq, _ = svd_decomposition(it.reshape(it.shape[0], -1))
+                #rr = uu @ torch.diag(ss)
+                self[idx] = qq.T.reshape(-1, *it.shape[1:] )
                 self[jdx] = torch.tensordot(
-                    jt, rr, ([-1], [1])
+                    jt, rr.T, ([-1], [1])
                 )
         self.iso_center = jdx
 

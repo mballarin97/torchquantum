@@ -54,6 +54,7 @@ from .u3 import U3, CU3, CU, U
 from .xx_min_yy import XXMINYY
 from .xx_plus_yy import XXPLUSYY
 from .sun import SU2, SU4
+from .u1q import U1q
 
 _all_variables = [
     EchoedCrossResonance,
@@ -118,6 +119,7 @@ _all_variables = [
     TDG,
     TrainableUnitary,
     TrainableUnitaryStrict,
+    U1q,
     U1,
     CU1,
     U2,
@@ -154,7 +156,8 @@ op_name_dict.update(
         "cp": CU1,
         "cr": CU1,
         "su2": SU2,
-        "su4": SU4
+        "su4": SU4,
+        "u1q": U1q,
     }
 )
 
