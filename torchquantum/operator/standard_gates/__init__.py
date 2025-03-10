@@ -38,7 +38,7 @@ from .r import R
 from .reset import Reset
 from .rot import Rot, CRot
 from .rx import RX, RXX, CRX
-from .ry import RY, RYY, CRY
+from .ry import RY, RYY, CRY, NCRY
 from .rz import RZ, MultiRZ, RZZ, RZX, CRZ
 from .toffoli import Toffoli, CCX, RC3X, RCCX
 from .qubit_unitary import QubitUnitary, QubitUnitaryFast
@@ -55,6 +55,7 @@ from .xx_min_yy import XXMINYY
 from .xx_plus_yy import XXPLUSYY
 from .sun import SU2, SU4
 from .u1q import U1q
+from .depolarizing import DP1, DP2
 
 _all_variables = [
     EchoedCrossResonance,
@@ -92,6 +93,7 @@ _all_variables = [
     RY,
     RYY,
     CRY,
+    NCRY,
     RZ,
     MultiRZ,
     RZZ,
@@ -130,6 +132,8 @@ _all_variables = [
     U,
     XXMINYY,
     XXPLUSYY,
+    DP1,
+    DP2,
 ]
 
 # create the operations dictionary
@@ -158,6 +162,8 @@ op_name_dict.update(
         "su2": SU2,
         "su4": SU4,
         "u1q": U1q,
+        "dp1": DP1,
+        "dp2": DP2,
     }
 )
 

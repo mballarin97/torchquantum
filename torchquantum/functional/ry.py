@@ -9,6 +9,7 @@ from torchpack.utils.logging import logger
 from torchquantum.util import normalize_statevector
 
 from .gate_wrapper import gate_wrapper, apply_unitary_einsum, apply_unitary_bmm
+from .depolarizing import dp1_matrix, dp2_matrix
 
 if TYPE_CHECKING:
     from torchquantum.device import QuantumDevice
@@ -45,6 +46,48 @@ def cry_matrix(params):
     matrix[:, 3, 3] = co[:, 0]
 
     return matrix.squeeze(0)
+
+def noisy_cry_matrix(params):
+    """Compute unitary matrix for CRY gate.
+
+    Args:
+        params (torch.Tensor): The rotation angle.
+
+    Returns:
+        torch.Tensor: The computed unitary matrix.
+
+    """
+    theta = params.type(C_DTYPE)
+    co = torch.cos(theta / 2)
+    si = torch.sin(theta / 2)
+    #p_err = 1-torch.sqrt(1-5/4*(1e-4+1e-3*theta/2))
+    p_err = 5/4*(1e-4+1e-3*theta/2)
+
+    matrix = (
+        torch.tensor(
+            [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],
+            dtype=C_DTYPE,
+            device=params.device,
+        )
+        .unsqueeze(0)
+        .repeat(co.shape[0], 1, 1)
+    )
+    matrix[:, 2, 2] = co[:, 0]
+    matrix[:, 2, 3] = -si[:, 0]
+    matrix[:, 3, 2] = si[:, 0]
+    matrix[:, 3, 3] = co[:, 0]
+    matp = matrix.conj().permute(0, 2, 1).contiguous()
+    matrix = torch.tensordot(matp, matrix, ([0], [0])).reshape([2]*8).permute(0, 6, 1, 7, 2, 4, 3, 5).reshape(16, 16)
+
+    #dp1 = dp1_matrix(torch.tensor([p_err/3]*3, dtype=F_DTYPE)).unsqueeze(0)
+    #print(dp1)
+    #dp = torch.kron(dp1, dp1)#.reshape([2]*8).permute(0, 6, 1, 7, 2, 4, 3, 5).reshape(16, 16)
+
+
+    dp = dp2_matrix( torch.tensor([p_err/15]*15, dtype=F_DTYPE) )
+    matrix =  matrix @ dp
+
+    return matrix
 
 
 def ry_matrix(params: torch.Tensor) -> torch.Tensor:
@@ -156,6 +199,7 @@ _ry_mat_dict = {
     "ry": ry_matrix,
     "ryy": ryy_matrix,
     "cry": cry_matrix,
+    "ncry": noisy_cry_matrix,
 }
 
 
@@ -191,6 +235,53 @@ def cry(
 
     """
     name = "cry"
+    mat = _ry_mat_dict[name]
+    gate_wrapper(
+        name=name,
+        mat=mat,
+        method=comp_method,
+        q_device=q_device,
+        wires=wires,
+        paramnum=1,
+        params=params,
+        n_wires=n_wires,
+        static=static,
+        parent_graph=parent_graph,
+        inverse=inverse,
+    )
+
+def noisy_cry(
+    q_device,
+    wires,
+    params=None,
+    n_wires=None,
+    static=False,
+    parent_graph=None,
+    inverse=False,
+    comp_method="bmm",
+):
+    """Perform the cry gate.
+
+    Args:
+        q_device (tq.QuantumDevice): The QuantumDevice.
+        wires (Union[List[int], int]): Which qubit(s) to apply the gate.
+        params (torch.Tensor, optional): Parameters (if any) of the gate.
+            Default to None.
+        n_wires (int, optional): Number of qubits the gate is applied to.
+            Default to None.
+        static (bool, optional): Whether use static mode computation.
+            Default to False.
+        parent_graph (tq.QuantumGraph, optional): Parent QuantumGraph of
+            current operation. Default to None.
+        inverse (bool, optional): Whether inverse the gate. Default to False.
+        comp_method (bool, optional): Use 'bmm' or 'einsum' method to perform
+        matrix vector multiplication. Default to 'bmm'.
+
+    Returns:
+        None.
+
+    """
+    name = "ncry"
     mat = _ry_mat_dict[name]
     gate_wrapper(
         name=name,

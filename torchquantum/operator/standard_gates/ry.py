@@ -44,3 +44,15 @@ class CRY(Operation, metaclass=ABCMeta):
     @classmethod
     def _matrix(cls, params):
         return tqf.cry_matrix(params)
+
+class NCRY(Operation, metaclass=ABCMeta):
+    """Class for Controlled Rotation Y gate."""
+
+    num_params = 1
+    num_wires = 2
+    op_name = "ncry"
+    func = staticmethod(tqf.noisy_cry)
+
+    @classmethod
+    def _matrix(cls, params):
+        return tqf.noisy_cry_matrix(params)
