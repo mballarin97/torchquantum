@@ -212,7 +212,7 @@ class CombTNDevice(nn.Module):
 
     def apply_two_sites_operator(self, idx, jdx, matrix, dirc="R"):
         matrix = matrix.reshape(2, 2, 2, 2).to(dtype=self.dtype)
-        if idx < jdx:
+        if idx > jdx:
             matrix = torch.permute(matrix, [1, 0, 3, 2])
 
         minid = min(idx, jdx)

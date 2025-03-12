@@ -174,41 +174,76 @@ class NoisyCombTNDevice(nn.Module):
 
     def overlap(self, other):
         """
-        Other should be in the pure state-density matrix form,
-        i.e. local dimensions 4
+        Other should be in the pure state form,
+        i.e. local dimensions 2
         """
         dim_tens = []
         for dd in range(self.n_dims):
             for ii in range(self.n_wires_per_dim-1, -1, -1):
                 idx = ii + self.n_wires_per_dim*dd
                 if ii == self.n_wires_per_dim-1:
+                    st = self[idx]
+                    st = st.reshape(st.shape[0], 2, self.osys_dim[idx], st.shape[2])
                     tens = torch.tensordot(
-                        self[idx],
+                        st,
                         other[idx].conj(),
-                        ([1, 2], [1, 2])
+                        ([1, 3], [1, 2])
+                    )
+                    # Tensor (left_o, o_leg, left_c)
+                    tens = tens.permute(0, 2, 1).reshape(-1, self.osys_dim[idx])
+                    tens = torch.tensordot(
+                        tens,
+                        tens.conj(),
+                        ([1], [1])
                     )
                 elif ii > 0:
+                    st = self[idx]
+                    st = st.reshape(st.shape[0], 2, self.osys_dim[idx], st.shape[2])
+                    st = torch.tensordot(
+                        st,
+                        other[idx].conj(),
+                        ([1], [1])
+                    ).permute(0, 3, 1, 2, 4).reshape(
+                        self[idx].shape[0]*other[idx].shape[0],
+                        self.osys_dim[idx],
+                        self[idx].shape[2]*other[idx].shape[2],
+                    )
+                    stc = st.conj()
                     tens = torch.tensordot(
-                        self[idx],
+                        st,
                         tens,
                         ([2], [0])
                     )
                     tens = torch.tensordot(
                         tens,
-                        other[idx].conj(),
+                        stc,
                         ([1, 2], [1, 2])
                     )
                 else: # Case ii==0
+                    st = self[idx]
+                    st = st.reshape(st.shape[0], 2, self.osys_dim[idx], *st.shape[2:])
+                    st = torch.tensordot(
+                        st,
+                        other[idx].conj(),
+                        ([1], [1])
+                    ).permute(0, 4, 1, 2, 5, 3, 6).reshape(
+                        self[idx].shape[0]*other[idx].shape[0],
+                        self.osys_dim[idx],
+                        self[idx].shape[2]*other[idx].shape[2],
+                        self[idx].shape[3]*other[idx].shape[3],
+                    )
+                    stc = st.conj()
                     tens = torch.tensordot(
-                        self[idx],
+                        st,
                         tens,
                         ([2], [0])
-                    )
+                    ).permute(0, 1, 3, 2)
                     tens = torch.tensordot(
                         tens,
-                        other[idx].conj(),
-                        ([1, 3], [1, 2])
-                    ).permute(0, 2, 1, 3)
+                        stc,
+                        ([1, 2], [1, 2])
+                    )
+
                     dim_tens.append(tens)
 
         tens = dim_tens[0].reshape(dim_tens[0].shape[2:])
