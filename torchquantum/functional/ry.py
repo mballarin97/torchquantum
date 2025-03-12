@@ -57,11 +57,12 @@ def noisy_cry_matrix(params):
         torch.Tensor: The computed unitary matrix.
 
     """
-    theta = params.type(C_DTYPE)
+    theta = params.type(F_DTYPE)
     co = torch.cos(theta / 2)
     si = torch.sin(theta / 2)
-    #p_err = 1-torch.sqrt(1-5/4*(1e-4+1e-3*theta/2))
-    p_err = 5/4*(1e-4+1e-3*theta/2)
+    errangle = (theta/2/np.pi) % 0.25
+    p_err = 1-torch.sqrt(1-5/4*(1e-4+1e-3*errangle/2))
+    #p_err = 1e-4#5/4*(1e-4+1e-3*errangle)
 
     matrix = (
         torch.tensor(
@@ -76,18 +77,18 @@ def noisy_cry_matrix(params):
     matrix[:, 2, 3] = -si[:, 0]
     matrix[:, 3, 2] = si[:, 0]
     matrix[:, 3, 3] = co[:, 0]
-    matp = matrix.conj().permute(0, 2, 1).contiguous()
-    matrix = torch.tensordot(matp, matrix, ([0], [0])).reshape([2]*8).permute(0, 6, 1, 7, 2, 4, 3, 5).reshape(16, 16)
 
     #dp1 = dp1_matrix(torch.tensor([p_err/3]*3, dtype=F_DTYPE)).unsqueeze(0)
     #print(dp1)
     #dp = torch.kron(dp1, dp1)#.reshape([2]*8).permute(0, 6, 1, 7, 2, 4, 3, 5).reshape(16, 16)
 
+    #dp = dp2_matrix( torch.tensor([p_err/15]*15, dtype=F_DTYPE) )
+    #matrix =  matrix @ dp
 
-    dp = dp2_matrix( torch.tensor([p_err/15]*15, dtype=F_DTYPE) )
-    matrix =  matrix @ dp
+    #matp = matrix.conj().permute(0, 2, 1).contiguous()
+    #matrix = torch.tensordot(matp, matrix, ([0], [0])).reshape([2]*8).permute(0, 6, 1, 7, 2, 4, 3, 5).reshape(16, 16)
 
-    return matrix
+    return [matrix.squeeze(0), p_err]
 
 
 def ry_matrix(params: torch.Tensor) -> torch.Tensor:

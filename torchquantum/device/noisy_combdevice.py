@@ -48,7 +48,11 @@ class NoisyCombTNDevice(nn.Module):
         n_dims: int,
         device: Union[torch.device, str] = "cpu",
         record_op: bool = False,
-        dtype : str = "complex"
+        dtype : str = "complex",
+        ctol : float = 1e-9,
+        otol : float = 1e-8,
+        cmbd : int = 64,
+        ombd : int = 16
     ):
         """A quantum device that contains the quantum density matrix.
         Args:
@@ -57,6 +61,16 @@ class NoisyCombTNDevice(nn.Module):
             device: which classical computing device to use, 'cpu' or 'cuda'
             record_op: whether to record the operations on the quantum device and then
                 they can be used to construct a static computation graph
+            dtype : str
+                Type of the TN
+            ctol : float
+                Tolerance for SVD of the closed system
+            otol : float
+                Tolerance for the SVD of the open system
+            cmbd : int
+                Maximum bond dimension for the SVD of the closed system
+            ombd : int
+                Maximum bond dimension for the SVD of the closed system
         """
         super().__init__()
         # number of qubits
@@ -69,12 +83,19 @@ class NoisyCombTNDevice(nn.Module):
         self.device = device
         self.iso_center = 0
         self.dtype = C_DTYPE if dtype == "complex" else F_DTYPE
+        self.osys_dim = [1]*self.n_wires
+
+        # Truncation params
+        self.ctol = ctol
+        self.otol = otol
+        self.cmbd = cmbd
+        self.ombd = ombd
 
         self.states = []
         for ii in range(self.n_wires):
-            _state = torch.zeros(4, dtype=self.dtype)
-            _state[0] = 1 + 0j  # type: ignore
-            new_shape = [1, 4, 1, 1] if ii%n_wires == 0 else [1,4,1]
+            _state = torch.zeros(2, dtype=self.dtype)
+            _state[0] = 1  # type: ignore
+            new_shape = [1, 2, 1, 1] if ii%n_wires == 0 else [1, 2,1]
             _state = torch.reshape(_state, new_shape).to(self.device)
 
             self.register_buffer(f"state_{ii}", _state)
@@ -87,7 +108,7 @@ class NoisyCombTNDevice(nn.Module):
     def __getitem__(self, idx):
         for tidx, tt in enumerate(self.states):
             if torch.isnan(tt).any():
-                raise RuntimeError(tidx)
+                raise RuntimeError(f"Nans in the {tidx} tensor")
         return self.states[idx]
 
     def __setitem__(self, idx, val):
@@ -100,9 +121,14 @@ class NoisyCombTNDevice(nn.Module):
     def get_states_1d(self):
         """Return the states in a 1d tensor."""
         tens = torch.squeeze(self[0], dim=(0, 3))
+        tens = tens.reshape(2, self.osys_dim[0], -1)
+        tens = torch.tensordot(tens, tens.conj(), ([1], [1])).permute(0, 2, 1, 3).reshape(4, -1)
         for ii in range(1, self.n_wires):
+            tmp = self[ii].reshape(self[ii].shape[0], 2, self.osys_dim[ii], -1)
+            tmp = torch.tensordot(tmp, tmp.conj(), ([2], [2])).permute(0, 3, 1, 4, 2, 5).reshape(tmp.shape[0]**2, 4, -1)
+
             tens = torch.tensordot(
-                tens, self[ii], ([-1], [0])
+                tens, tmp, ([-1], [0])
             )
         tens = tens.reshape([2]*(2*self.n_wires))
         order = np.arange(2*self.n_wires).reshape(-1, 2).reshape(-1, order="F")
@@ -211,30 +237,69 @@ class NoisyCombTNDevice(nn.Module):
 
     def apply_one_site_operator(self, wires, matrix):
         state = self[wires]
+        sshape = state.shape
         matrix = matrix.to(dtype=self.dtype)
-        # Promote to the U^\dagger rho U
-        if matrix.shape[0] == 2:
-            matp = matrix.T.conj().contiguous()
-            matrix = torch.kron(matp, matrix)
+        state = state.reshape(sshape[0], 2, self.osys_dim[wires], *sshape[2:])
+
         state = torch.tensordot(
             state,
             matrix,
             ([1], [1])
         )
-        if state.ndim == 3:
-            state = torch.permute(state, [0, 2, 1])
-        elif state.ndim == 4:
+        if len(sshape) == 3:
             state = torch.permute(state, [0, 3, 1, 2])
-        self[wires] = state
+        elif len(sshape) == 4:
+            state = torch.permute(state, [0, 4, 1, 2, 3])
+        self[wires] = state.reshape(sshape[0], 2*self.osys_dim[wires], *sshape[2:])
+
+    def apply_one_site_noise(self, wires, p_err):
+        tensor = torch.zeros((2, 2, 4), dtype=C_DTYPE)
+        # Having the exact same probability is an issue for the SVD,
+        # leading to singular values with multiplicity >1. Thus, we slightly
+        # modify the probabilities to ensure the singular values are different.
+        dp = torch.normal( 0., 1e-3/3, (3,))
+        tensor[:, :, 0] = torch.sqrt(1-p_err-dp.sum())*torch.tensor([[1, 0], [0, 1]], dtype=C_DTYPE)
+        tensor[:, :, 1] = torch.sqrt(p_err/3+dp[0])*torch.tensor([[0, 1], [1, 0]], dtype=C_DTYPE)
+        tensor[:, :, 2] = torch.sqrt(p_err/3+dp[1])*torch.tensor([[0, -1j], [1j, 0]], dtype=C_DTYPE)
+        tensor[:, :, 3] = torch.sqrt(p_err/3+dp[2])*torch.tensor([[1, 0], [0, -1]], dtype=C_DTYPE)
+
+        self.iso_towards(wires)
+        state = self[wires]
+        sshape = state.shape
+        state = state.reshape(sshape[0], 2, self.osys_dim[wires], *sshape[2:])
+
+        state = torch.tensordot(
+            state,
+            tensor,
+            ([1], [1])
+        )
+        if len(sshape) == 3:
+            state = torch.permute(state, [0, 3, 2, 1, 4])
+        elif len(sshape) == 4:
+            state = torch.permute(state, [0, 4, 2, 3, 1, 5])
+
+        state = state.reshape(-1, np.prod(state.shape[-2:]) )
+        uu, ss, _, _ = svd_decomposition(state, tol=self.otol, max_rank=self.ombd)
+        self.osys_dim[wires] = len(ss)
+        state = torch.matmul(uu, torch.diag(ss))
+        state = state.reshape(sshape[0], 2, *sshape[2:], len(ss))
+
+        if len(sshape) == 3:
+            state = torch.permute(state, [0, 1, 3, 2])
+        elif len(sshape) == 4:
+            state = torch.permute(state, [0, 1, 4, 2, 3])
+
+        self[wires] = state.reshape(sshape[0], 2*self.osys_dim[wires], *sshape[2:])
 
     def apply_two_sites_operator(self, idx, jdx, matrix, dirc="R"):
-        if matrix.shape[0] == 4:
-            matrix = matrix.unsqueeze(0)
-            matp = matrix.conj().permute(0, 2, 1).contiguous()
-            matrix = torch.tensordot(matp, matrix, ([0], [0])).reshape([2]*8).permute(0, 6, 1, 7, 2, 4, 3, 5).reshape(16, 16)
+        apply_noise = False
+        if isinstance(matrix, list):
+            apply_noise = False
+            p_err = matrix[1]
+            matrix = matrix[0]
 
-        matrix = matrix.reshape(4, 4, 4, 4).to(dtype=self.dtype)
-        if idx < jdx:
+        matrix = matrix.reshape(2, 2, 2, 2).to(dtype=self.dtype)
+        if idx > jdx:
             matrix = torch.permute(matrix, [1, 0, 3, 2])
 
         minid = min(idx, jdx)
@@ -248,12 +313,15 @@ class NoisyCombTNDevice(nn.Module):
             two_tens = torch.tensordot(
                 mint, maxt, ([3], [0])
             )
+            two_tens = two_tens.reshape(
+                mint.shape[0], 2, self.osys_dim[minid], mint.shape[-1], 2, self.osys_dim[maxid], maxt.shape[2], maxt.shape[3]
+            )
             two_tens = torch.tensordot(
                 two_tens, matrix,
-                ([1, 3], [2, 3])
-            ).permute(0, 4, 1, 2, 5, 3).reshape(-1, np.prod(maxt.shape[1:]) )
+                ([1, 4], [2, 3])
+            ).permute(0, 6, 1, 2, 3, 7, 4, 5).reshape(-1, np.prod(maxt.shape[1:]) )
             uu, ss, vv, _ = svd_decomposition(
-                two_tens, tol=0, max_rank=64
+                two_tens, tol=self.ctol, max_rank=self.cmbd
             )
             if dirc == "R":
                 rr = torch.matmul(torch.diag(ss), vv)
@@ -268,12 +336,15 @@ class NoisyCombTNDevice(nn.Module):
             two_tens = torch.tensordot(
                 mint, maxt, ([2], [0])
             )
+            two_tens = two_tens.reshape(
+                mint.shape[0], 2, self.osys_dim[minid], mint.shape[-1], 2, self.osys_dim[maxid], maxt.shape[2]
+            )
             two_tens = torch.tensordot(
                 two_tens, matrix,
-                ([1, 3], [2, 3])
-            ).permute(0, 3, 1, 4, 2).reshape(-1, np.prod(maxt.shape[1:]) )
+                ([1, 4], [2, 3])
+            ).permute(0, 5, 1, 2, 6, 3, 4).reshape(-1, np.prod(maxt.shape[1:]) )
             uu, ss, vv, _ = svd_decomposition(
-                two_tens, tol=0, max_rank=64
+                two_tens, tol=self.ctol, max_rank=self.cmbd
             )
             if dirc == "R":
                 rr = torch.matmul(torch.diag(ss), vv)
@@ -289,12 +360,15 @@ class NoisyCombTNDevice(nn.Module):
             two_tens = torch.tensordot(
                 mint, maxt, ([2], [0])
             )
+            two_tens = two_tens.reshape(
+                mint.shape[0], 2, self.osys_dim[minid], 2, self.osys_dim[maxid], maxt.shape[2]
+            )
             two_tens = torch.tensordot(
                 two_tens, matrix,
-                ([1, 2], [2, 3])
-            ).permute(0, 2, 3, 1).reshape(np.prod(mint.shape[:2]), -1)
+                ([1, 3], [2, 3])
+            ).permute(0, 4, 1, 5, 2, 3).reshape(np.prod(mint.shape[:2]), -1)
             uu, ss, vv, _ = svd_decomposition(
-                two_tens, tol=1e-12, max_rank=64
+                two_tens, tol=self.ctol, max_rank=self.cmbd
             )
             if dirc == "R":
                 rr = torch.matmul(torch.diag(ss), vv)
@@ -312,6 +386,9 @@ class NoisyCombTNDevice(nn.Module):
             self.iso_center = maxid
         else:
             self.iso_center = minid
+        if apply_noise:
+            self.apply_one_site_noise(idx, p_err)
+            self.apply_one_site_noise(jdx, p_err)
 
     def iso_towards(self, jdx):
         nwd = self.n_wires_per_dim

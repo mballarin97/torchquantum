@@ -49,12 +49,11 @@ def dp2_matrix(params):
         torch.Tensor: The computed unitary matrix.
 
     """
-    amat = (1-params.sum())*torch.kron(PAULIS[0], PAULIS[0])
-    amat = torch.kron(amat, torch.kron(PAULIS[0], PAULIS[0]))
+    amat = (1-params.sum())*torch.kron(PAULIS[0], PAULIS[0]).unsqueeze(0)
+    return amat
     for ii in range(1, 16):
         idxs = np.unravel_index(ii, (4, 4))
         pp = torch.kron(PAULIS[idxs[0]], PAULIS[idxs[1]]).unsqueeze(0)
-        pp = torch.tensordot(pp, pp, ([0], [0])).reshape([2]*8).permute(0, 6, 1, 7, 2, 4, 3, 5).reshape(16, 16)
         amat += pp*params[ii-1].type(C_DTYPE)
     return amat
 
