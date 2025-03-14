@@ -29,7 +29,7 @@ import numpy as np
 
 from torchquantum.macro import C_DTYPE, F_DTYPE
 from torchquantum.functional import func_name_dict, func_name_dict_collect
-from .combdevice import svd_decomposition
+from torchquantum.linalg import truncated_svd_gesdd as svd_decomposition
 
 from typing import Union
 
@@ -311,19 +311,25 @@ class NoisyCombTNDevice(nn.Module):
         if self.dtype == "complex":
             dtype = C_DTYPE
             tensor = torch.zeros((2, 2, 4), dtype=dtype)
-            dp = torch.rand(2)* (1e-2*p_err/3)
+            dp = torch.rand(2)* (1e-3*p_err/3)
             dp = torch.cat( (dp[:, 0], dp[:, 1], -torch.tensor([dp.sum()]) ) )[torch.randperm(3)]
         else:
             dtype = F_DTYPE
             tensor = torch.zeros((2, 2, 3), dtype=dtype)
-            dp = torch.rand(1)* (1e-2*p_err/3)
+            dp = torch.tensor([1/3*p_err, 2/3*p_err])
             dp = torch.cat( (dp, -dp) )[torch.randperm(2)]
 
-        tensor[:, :, 0] = torch.sqrt(1-p_err)*torch.tensor([[1, 0], [0, 1]], dtype=dtype)
-        tensor[:, :, 1] = torch.sqrt(p_err/len(dp)+dp[0])*torch.tensor([[0, 1], [1, 0]], dtype=dtype)
-        tensor[:, :, -1] = torch.sqrt(p_err/len(dp)+dp[-1])*torch.tensor([[1, 0], [0, -1]], dtype=dtype)
+        plifted0 = dp[0]
+        plifted1 = dp[1]
+        ptot = plifted0 + plifted1
+        tensor[:, :, 1] = torch.sqrt(plifted0)*torch.tensor([[0, 1], [1, 0]], dtype=dtype)
+        tensor[:, :, -1] = torch.sqrt(plifted1)*torch.tensor([[1, 0], [0, -1]], dtype=dtype)
         if self.dtype == "complex":
-            tensor[:, :, 2] = torch.sqrt(p_err/len(dp)+dp[1])*torch.tensor([[0, -1j], [1j, 0]], dtype=dtype)
+            plifted2 = torch.abs(p_err/len(dp)+dp[1])
+            ptot += plifted2
+            tensor[:, :, 2] = torch.sqrt(plifted2)*torch.tensor([[0, -1j], [1j, 0]], dtype=dtype)
+        #print(tensor)
+        tensor[:, :, 0] = torch.sqrt(1-ptot)*torch.tensor([[1, 0], [0, 1]], dtype=dtype)
 
         self.iso_towards(wires)
         state = self[wires]
@@ -332,7 +338,7 @@ class NoisyCombTNDevice(nn.Module):
 
         state = torch.tensordot(
             state,
-            tensor,
+            tensor.to(state.dtype),
             ([1], [1])
         )
         if len(sshape) == 3:
@@ -342,7 +348,8 @@ class NoisyCombTNDevice(nn.Module):
 
         state = state.reshape(-1, np.prod(state.shape[-2:]) )
         if True:
-            uu, ss, _, _ = svd_decomposition(state, tol=self.otol, max_rank=self.ombd)
+            #uu, ss, _, _ = svd_decomposition(state, tol=self.otol, max_rank=self.ombd)
+            uu, ss, _ = svd_decomposition(state, self.ombd, rel_tol=self.otol)
             state = torch.matmul(uu, torch.diag(ss))
             odim = len(ss)
         else:
@@ -386,9 +393,11 @@ class NoisyCombTNDevice(nn.Module):
                 two_tens, matrix,
                 ([1, 4], [2, 3])
             ).permute(0, 6, 1, 2, 3, 7, 4, 5).reshape(-1, np.prod(maxt.shape[1:]) )
-            uu, ss, vv, _ = svd_decomposition(
-                two_tens, tol=self.ctol, max_rank=self.cmbd
-            )
+            #uu, ss, vv, _ = svd_decomposition(
+            #    two_tens, tol=self.ctol, max_rank=self.cmbd
+            #)
+            uu, ss, vv = svd_decomposition(two_tens, self.cmbd, rel_tol=self.ctol)
+            vv = vv.T.conj()
             if dirc == "R":
                 rr = torch.matmul(torch.diag(ss), vv)
             else:
@@ -409,9 +418,11 @@ class NoisyCombTNDevice(nn.Module):
                 two_tens, matrix,
                 ([1, 4], [2, 3])
             ).permute(0, 5, 1, 2, 6, 3, 4).reshape(-1, np.prod(maxt.shape[1:]) )
-            uu, ss, vv, _ = svd_decomposition(
-                two_tens, tol=self.ctol, max_rank=self.cmbd
-            )
+            #uu, ss, vv, _ = svd_decomposition(
+            #    two_tens, tol=self.ctol, max_rank=self.cmbd
+            #)
+            uu, ss, vv = svd_decomposition(two_tens, self.cmbd, rel_tol=self.ctol)
+            vv = vv.T.conj()
             if dirc == "R":
                 rr = torch.matmul(torch.diag(ss), vv)
             else:
@@ -433,9 +444,11 @@ class NoisyCombTNDevice(nn.Module):
                 two_tens, matrix,
                 ([1, 3], [2, 3])
             ).permute(0, 4, 1, 5, 2, 3).reshape(np.prod(mint.shape[:2]), -1)
-            uu, ss, vv, _ = svd_decomposition(
-                two_tens, tol=self.ctol, max_rank=self.cmbd
-            )
+            #uu, ss, vv, _ = svd_decomposition(
+            #    two_tens, tol=self.ctol, max_rank=self.cmbd
+            #)
+            uu, ss, vv = svd_decomposition(two_tens, self.cmbd, rel_tol=self.ctol)
+            vv = vv.T.conj()
             if dirc == "R":
                 rr = torch.matmul(torch.diag(ss), vv)
             else:

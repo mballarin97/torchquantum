@@ -60,8 +60,9 @@ def noisy_cry_matrix(params):
     theta = params.type(F_DTYPE)
     co = torch.cos(theta / 2)
     si = torch.sin(theta / 2)
-    errangle = (theta/2/np.pi) % 0.25
-    p_err = 1-torch.sqrt(1-5/4*(1e-4+1e-3*errangle/2))
+    errangle = torch.abs(theta)/2/np.pi
+    p_err = 1-torch.sqrt(1-5/4*(1e-4+1e-3*errangle))
+    #print(p_err, 5/4*(1e-4+1e-3*errangle), errangle)
     #p_err = 1e-4#5/4*(1e-4+1e-3*errangle)
 
     matrix = (
