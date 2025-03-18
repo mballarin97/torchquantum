@@ -22,13 +22,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-from string import ascii_lowercase
 import torch
 import torch.nn as nn
 import numpy as np
 
 from torchquantum.macro import C_DTYPE, F_DTYPE
 from torchquantum.functional import func_name_dict, func_name_dict_collect
+from torchquantum.linalg import truncated_svd_gesdd as svd_decomposition
 
 from typing import Union
 
@@ -42,7 +42,9 @@ class CombTNDevice(nn.Module):
         n_dims: int,
         device: Union[torch.device, str] = "cpu",
         record_op: bool = False,
-        dtype : str = "complex"
+        dtype : str = "complex",
+        ctol : float = 1e-9,
+        cmbd : int = 64,
     ):
         """A quantum device that contains the quantum state vector.
         Args:
@@ -63,6 +65,8 @@ class CombTNDevice(nn.Module):
         self.device = device
         self.iso_center = 0
         self.dtype = C_DTYPE if dtype == "complex" else F_DTYPE
+        self.ctol = ctol
+        self.cmbd = cmbd
 
         self.states = []
         for ii in range(self.n_wires):
@@ -137,6 +141,68 @@ class CombTNDevice(nn.Module):
 
         return torch.squeeze(tens)
 
+    def sample(self, num_samples):
+        probs = {}
+        bitstrings = []
+
+        self.iso_towards(self.n_wires_per_dim-1)
+        for _ in range(num_samples):
+            bitstring, prob = self.single_sample()
+            probs[bitstring] = prob
+            bitstrings.append(bitstring)
+
+        uniq, count = np.unique(bitstrings, return_counts=True)
+        counts = dict(zip(uniq, count))
+        return probs, counts
+
+
+    def single_sample(self):
+        nwd = self.n_wires_per_dim
+        self.iso_towards(nwd-1)
+        other = self.copy()
+
+        val = ""
+        prob = 1
+        for dd in range(self.n_dims):
+            tmp_val = ""
+            idxs = np.array(list(range( (nwd)*(dd+1)-2, nwd*dd-2, -1)))
+            if dd > 0:
+                other[nwd*dd] = torch.tensordot(
+                    tens, other[nwd*dd], ([-1], [0])
+                )
+                other.iso_center = nwd*dd
+                other.iso_towards( idxs[0]+1 )
+            tens = self[self.iso_center].squeeze(2)
+            for ii, idx in enumerate(idxs):
+                all_idxs = list(range(tens.ndim))
+                all_idxs.pop(1)
+                dm = torch.tensordot(
+                    tens, tens.conj(),
+                    (all_idxs, all_idxs)
+                )
+                slices = [slice(None) for _ in range(tens.ndim)]
+                # Measured 0
+                if np.random.rand() < dm[0, 0].abs():
+                    slices[1] = 0
+                    tmp_val += "0"
+                    prob *= dm[0, 0].abs()
+                    fact = 1/torch.sqrt(dm[0, 0].abs())
+                else:
+                    slices[1] = 1
+                    tmp_val += "1"
+                    prob *= dm[1, 1].abs()
+                    fact = 1/torch.sqrt(dm[1, 1].abs())
+
+                tens = tens[slices]*fact
+                if ii < len(idxs)-1:
+                    tens = torch.tensordot(
+                        other[idx],
+                        tens,
+                        ([2], [0])
+                    )
+            val += tmp_val[::-1]
+        return val, prob.detach().item()
+
     def overlap(self, other):
         dim_tens = []
         for dd in range(self.n_dims):
@@ -188,6 +254,22 @@ class CombTNDevice(nn.Module):
         """Return the state in a 1d tensor."""
         return torch.reshape(self.state, [2**self.n_wires])
 
+    def copy(self):
+        copy_dev = CombTNDevice(
+            self.n_wires_per_dim,
+            self.n_dims,
+            self.device,
+            self.record_op,
+            self.dtype,
+            self.ctol,
+            self.cmbd
+            )
+        for ii in range(self.n_wires):
+            copy_dev[ii] = self[ii].detach().clone()
+
+        copy_dev.iso_center = self.iso_center
+        return copy_dev
+
     @property
     def name(self):
         """Return the name of the device."""
@@ -229,10 +311,13 @@ class CombTNDevice(nn.Module):
             two_tens = torch.tensordot(
                 two_tens, matrix,
                 ([1, 3], [2, 3])
-            ).permute(0, 4, 1, 2, 5, 3).reshape(-1, np.prod(maxt.shape[1:]) )
-            uu, ss, vv, _ = svd_decomposition(
-                two_tens, tol=0, max_rank=64
-            )
+            ).permute(0, 4, 1, 5, 2, 3).reshape(-1, np.prod(maxt.shape[1:]) )
+            #uu, ss, vv, _ = svd_decomposition(
+            #    two_tens, tol=0, max_rank=64
+            #)
+            uu, ss, vv = svd_decomposition(two_tens, self.cmbd, rel_tol=self.ctol)
+            ss = ss.to(vv.dtype)
+            vv = vv.T.conj()
             if dirc == "R":
                 rr = torch.matmul(torch.diag(ss), vv)
             else:
@@ -240,7 +325,7 @@ class CombTNDevice(nn.Module):
                 rr = vv
             #uu, rr = torch.linalg.qr(two_tens)
             chi = uu.shape[1]
-            mint = uu.reshape( *mint.shape[:3], chi )
+            mint = uu.reshape( *mint.shape[:-1], chi )
             maxt = rr.reshape((chi, *maxt.shape[1:]))
         elif minid % self.n_wires_per_dim == 0:
             two_tens = torch.tensordot(
@@ -250,9 +335,12 @@ class CombTNDevice(nn.Module):
                 two_tens, matrix,
                 ([1, 3], [2, 3])
             ).permute(0, 3, 1, 4, 2).reshape(-1, np.prod(maxt.shape[1:]) )
-            uu, ss, vv, _ = svd_decomposition(
-                two_tens, tol=0, max_rank=64
-            )
+            #uu, ss, vv, _ = svd_decomposition(
+            #    two_tens, tol=0, max_rank=64
+            #)
+            uu, ss, vv = svd_decomposition(two_tens, self.cmbd, rel_tol=self.ctol)
+            ss = ss.to(vv.dtype)
+            vv = vv.T.conj()
             if dirc == "R":
                 rr = torch.matmul(torch.diag(ss), vv)
             else:
@@ -271,9 +359,12 @@ class CombTNDevice(nn.Module):
                 two_tens, matrix,
                 ([1, 2], [2, 3])
             ).permute(0, 2, 3, 1).reshape(np.prod(mint.shape[:2]), -1)
-            uu, ss, vv, _ = svd_decomposition(
-                two_tens, tol=1e-12, max_rank=64
-            )
+            #uu, ss, vv, _ = svd_decomposition(
+            #    two_tens, tol=1e-12, max_rank=64
+            #)
+            uu, ss, vv = svd_decomposition(two_tens, self.cmbd, rel_tol=self.ctol)
+            ss = ss.to(vv.dtype)
+            vv = vv.T.conj()
             if dirc == "R":
                 rr = torch.matmul(torch.diag(ss), vv)
             else:
@@ -303,7 +394,7 @@ class CombTNDevice(nn.Module):
             idxs = [ii for ii in range(self.iso_center, jdx+step, step)]
         else:
             # First go to the zeroth of your dimension
-            idxs = [ii for ii in range(self.iso_center, -1, -1)]
+            idxs = [ii for ii in range(self.iso_center, self.iso_center//nwd*nwd-1, -1)]
             new_iso = idxs[-1]
             # Then go to the zeroth of the new dimension
             step = 1 if jdx > new_iso else -1
@@ -330,13 +421,19 @@ class CombTNDevice(nn.Module):
             self[jdx] = torch.tensordot(
                     rr, jt, ([1], [0])
                 )
-            #print(idx, jdx, self[idx].shape, it.shape)
-        elif jdx % self.n_wires_per_dim == 0:
-            qq, rr = torch.linalg.qr(it.reshape(it.shape[0], -1).T )
-            self[idx] = qq.T.reshape(-1, *it.shape[1:] )
-            self[jdx] = torch.tensordot(
-                jt, rr.T, ([2], [1])
-            ).permute(0, 1, 3, 2)
+        elif jdx % self.n_wires_per_dim == 0 and idx % self.n_wires_per_dim != 0:
+            if idx < jdx:
+                qq, rr = torch.linalg.qr(it.reshape(-1, it.shape[-1]) )
+                self[idx] = qq.reshape(*it.shape[:-1], -1 )
+                self[jdx] = torch.tensordot(
+                    rr, jt, ([1], [0])
+                )
+            else:
+                qq, rr = torch.linalg.qr(it.reshape(it.shape[0], -1).T )
+                self[idx] = qq.T.reshape(-1, *it.shape[1:] )
+                self[jdx] = torch.tensordot(
+                    jt, rr.T, ([2], [1])
+                ).permute(0, 1, 3, 2)
         else:
             if idx < jdx:
                 qq, rr = torch.linalg.qr(it.reshape(-1, it.shape[-1]))
@@ -364,7 +461,7 @@ for func_name, func in func_name_dict_collect.items():
     setattr(CombTNDevice, func_name, func)
 
 
-def svd_decomposition(matrix, tol=1e-12, max_rank=None, min_rank=1):
+def svd_decomposition_(matrix, tol=1e-12, max_rank=None, min_rank=1):
     """
     Perform the singolar value decomposition of a matrix,
     discarding up to tol norm in the singular values
