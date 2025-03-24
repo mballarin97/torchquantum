@@ -259,7 +259,7 @@ class NoisyCombTNDevice(nn.Module):
                         tens,
                         stc,
                         ([1, 2], [1, 2])
-                    )
+                    ).permute(0, 2, 1, 3)
 
                     dim_tens.append(tens)
 
@@ -350,6 +350,7 @@ class NoisyCombTNDevice(nn.Module):
         if True:
             #uu, ss, _, _ = svd_decomposition(state, tol=self.otol, max_rank=self.ombd)
             uu, ss, _ = svd_decomposition(state, self.ombd, rel_tol=self.otol)
+            ss = ss.to(uu.dtype)
             state = torch.matmul(uu, torch.diag(ss))
             odim = len(ss)
         else:
@@ -387,7 +388,7 @@ class NoisyCombTNDevice(nn.Module):
                 mint, maxt, ([3], [0])
             )
             two_tens = two_tens.reshape(
-                mint.shape[0], 2, self.osys_dim[minid], mint.shape[-1], 2, self.osys_dim[maxid], maxt.shape[2], maxt.shape[3]
+                mint.shape[0], 2, self.osys_dim[minid], mint.shape[-2], 2, self.osys_dim[maxid], maxt.shape[2], maxt.shape[3]
             )
             two_tens = torch.tensordot(
                 two_tens, matrix,
@@ -398,6 +399,7 @@ class NoisyCombTNDevice(nn.Module):
             #)
             uu, ss, vv = svd_decomposition(two_tens, self.cmbd, rel_tol=self.ctol)
             vv = vv.T.conj()
+            ss = ss.to(vv.dtype)
             if dirc == "R":
                 rr = torch.matmul(torch.diag(ss), vv)
             else:
@@ -423,6 +425,7 @@ class NoisyCombTNDevice(nn.Module):
             #)
             uu, ss, vv = svd_decomposition(two_tens, self.cmbd, rel_tol=self.ctol)
             vv = vv.T.conj()
+            ss = ss.to(vv.dtype)
             if dirc == "R":
                 rr = torch.matmul(torch.diag(ss), vv)
             else:
@@ -449,6 +452,7 @@ class NoisyCombTNDevice(nn.Module):
             #)
             uu, ss, vv = svd_decomposition(two_tens, self.cmbd, rel_tol=self.ctol)
             vv = vv.T.conj()
+            ss = ss.to(vv.dtype)
             if dirc == "R":
                 rr = torch.matmul(torch.diag(ss), vv)
             else:
@@ -481,7 +485,7 @@ class NoisyCombTNDevice(nn.Module):
             idxs = [ii for ii in range(self.iso_center, jdx+step, step)]
         else:
             # First go to the zeroth of your dimension
-            idxs = [ii for ii in range(self.iso_center, -1, -1)]
+            idxs = [ii for ii in range(self.iso_center, self.iso_center//nwd*nwd-1, -1)]
             new_iso = idxs[-1]
             # Then go to the zeroth of the new dimension
             step = 1 if jdx > new_iso else -1
@@ -508,13 +512,19 @@ class NoisyCombTNDevice(nn.Module):
             self[jdx] = torch.tensordot(
                     rr, jt, ([1], [0])
                 )
-            #print(idx, jdx, self[idx].shape, it.shape)
-        elif jdx % self.n_wires_per_dim == 0:
-            qq, rr = torch.linalg.qr(it.reshape(it.shape[0], -1).T )
-            self[idx] = qq.T.reshape(-1, *it.shape[1:] )
-            self[jdx] = torch.tensordot(
-                jt, rr.T, ([2], [1])
-            ).permute(0, 1, 3, 2)
+        elif jdx % self.n_wires_per_dim == 0 and idx % self.n_wires_per_dim != 0:
+            if idx < jdx:
+                qq, rr = torch.linalg.qr(it.reshape(-1, it.shape[-1]) )
+                self[idx] = qq.reshape(*it.shape[:-1], -1 )
+                self[jdx] = torch.tensordot(
+                    rr, jt, ([1], [0])
+                )
+            else:
+                qq, rr = torch.linalg.qr(it.reshape(it.shape[0], -1).T )
+                self[idx] = qq.T.reshape(-1, *it.shape[1:] )
+                self[jdx] = torch.tensordot(
+                    jt, rr.T, ([2], [1])
+                ).permute(0, 1, 3, 2)
         else:
             if idx < jdx:
                 qq, rr = torch.linalg.qr(it.reshape(-1, it.shape[-1]))

@@ -29,6 +29,7 @@ from .ry import ry, ryy, cry, yy, _ry_mat_dict, ry_matrix, ryy_matrix, cry_matri
 from .rz import (
     rz,
     rzz,
+    noisy_rzz,
     crz,
     zz,
     zx,

@@ -45,6 +45,17 @@ class RZZ(DiagonalOperation, metaclass=ABCMeta):
     def _matrix(cls, params):
         return tqf.rzz_matrix(params)
 
+class NRZZ(Operation, metaclass=ABCMeta):
+    """Class for Controlled Rotation Y gate."""
+
+    num_params = 1
+    num_wires = 2
+    op_name = "nrzz"
+    func = staticmethod(tqf.noisy_rzz)
+
+    @classmethod
+    def _matrix(cls, params):
+        return tqf.noisy_rzz_matrix(params)
 
 class RZX(Operation, metaclass=ABCMeta):
     """Class for RZX Gate."""

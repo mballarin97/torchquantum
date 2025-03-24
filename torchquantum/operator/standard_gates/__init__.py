@@ -39,7 +39,7 @@ from .reset import Reset
 from .rot import Rot, CRot
 from .rx import RX, RXX, CRX
 from .ry import RY, RYY, CRY, NCRY
-from .rz import RZ, MultiRZ, RZZ, RZX, CRZ
+from .rz import RZ, MultiRZ, RZZ, RZX, CRZ, NRZZ
 from .toffoli import Toffoli, CCX, RC3X, RCCX
 from .qubit_unitary import QubitUnitary, QubitUnitaryFast
 from .trainable_unitary import TrainableUnitary, TrainableUnitaryStrict
@@ -97,6 +97,7 @@ _all_variables = [
     RZ,
     MultiRZ,
     RZZ,
+    NRZZ,
     RZX,
     CRZ,
     Toffoli,
@@ -154,6 +155,7 @@ op_name_dict.update(
         "xx": RXX,
         "yy": RYY,
         "zz": RZZ,
+        "nrzz": NRZZ,
         "zx": RZX,
         "ccx": Toffoli,
         "p": U1,
