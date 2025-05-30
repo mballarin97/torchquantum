@@ -92,7 +92,12 @@ def noisy_rzz_matrix(params):
     theta = params.type(C_DTYPE)
     theta = params.type(F_DTYPE)
     errangle = torch.abs(theta)/np.pi
-    p_err = 1-torch.sqrt(1-5/4*(1e-4+1e-3*errangle))
+    if errangle % 1 == 0:
+        errangle = torch.ones_like(errangle)
+    else:
+        errangle = errangle % 1
+    if errangle > 0.5:
+        errangle = 1 - errangle
 
     exp = torch.exp(-0.5j * theta)
     conj_exp = torch.conj(exp)
@@ -112,7 +117,7 @@ def noisy_rzz_matrix(params):
     matrix[:, 2, 2] = conj_exp[:, 0]
     matrix[:, 3, 3] = exp[:, 0]
 
-    return [matrix.squeeze(0), p_err]
+    return [matrix.squeeze(0), errangle]
 
 
 def rzx_matrix(params):

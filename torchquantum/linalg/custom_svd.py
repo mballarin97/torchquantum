@@ -115,6 +115,8 @@ def truncated_svd_gesdd(M, chi, abs_tol=1.0e-14, rel_tol=None, ad_decomp_reg=1.0
     Ut = U[:, :St.shape[0]]
     Vt = V[:, :St.shape[0]]
 
+    if verbosity:
+        return Ut, St, Vt, norm_trunc
     return Ut, St, Vt
 
 def truncated_svd_af(M, chi, abs_tol=1.0e-14, rel_tol=None, ad_decomp_reg=1.0e-12,\

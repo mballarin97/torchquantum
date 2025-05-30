@@ -449,7 +449,7 @@ class CombTNDevice(nn.Module):
                 #rr = uu @ torch.diag(ss)
                 self[idx] = qq.T.reshape(-1, *it.shape[1:] )
                 self[jdx] = torch.tensordot(
-                    jt, rr.T, ([-1], [1])
+                    jt, rr.T, ([-1], [0])
                 )
         self.iso_center = jdx
 

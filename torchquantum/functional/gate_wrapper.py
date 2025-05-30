@@ -462,7 +462,7 @@ def gate_wrapper(
                         density_noise = density_noise + apply_unitary_density_bmm(density, noise_mat, wires)
                     density = p_identity * density + density_noise
                 q_device.densities = apply_unitary_density_bmm(density, matrix, wires)
-        elif q_device.device_name == "looplesstn":
+        elif q_device.device_name in ("looplesstn", "noisy_comb_tn", "mps"):
             if isinstance(wires, str):
                 wires = (wires, )
             if len(wires)==1:
