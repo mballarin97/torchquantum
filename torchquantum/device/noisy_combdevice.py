@@ -512,9 +512,6 @@ class NoisyCombTNDevice(nn.Module):
                 two_tens, matrix,
                 ([1, 4], [2, 3])
             ).permute(0, 6, 1, 2, 3, 7, 4, 5).reshape(-1, np.prod(maxt.shape[1:]) )
-            #uu, ss, vv, _ = svd_decomposition(
-            #    two_tens, tol=self.ctol, max_rank=self.cmbd
-            #)
             uu, ss, vv = svd_decomposition(two_tens, self.cmbd, rel_tol=self.ctol)
             vv = vv.T.conj()
             ss = ss.to(vv.dtype)
@@ -523,7 +520,6 @@ class NoisyCombTNDevice(nn.Module):
             else:
                 uu = torch.matmul(uu, torch.diag(ss))
                 rr = vv
-            #uu, rr = torch.linalg.qr(two_tens)
             chi = uu.shape[1]
             mint = uu.reshape( *mint.shape[:3], chi )
             maxt = rr.reshape((chi, *maxt.shape[1:]))
@@ -538,9 +534,6 @@ class NoisyCombTNDevice(nn.Module):
                 two_tens, matrix,
                 ([1, 4], [2, 3])
             ).permute(0, 5, 1, 2, 6, 3, 4).reshape(-1, np.prod(maxt.shape[1:]) )
-            #uu, ss, vv, _ = svd_decomposition(
-            #    two_tens, tol=self.ctol, max_rank=self.cmbd
-            #)
             uu, ss, vv = svd_decomposition(two_tens, self.cmbd, rel_tol=self.ctol)
             vv = vv.T.conj()
             ss = ss.to(vv.dtype)
@@ -549,7 +542,6 @@ class NoisyCombTNDevice(nn.Module):
             else:
                 uu = torch.matmul(uu, torch.diag(ss))
                 rr = vv
-            #uu, rr = torch.linalg.qr(two_tens)
             chi = uu.shape[1]
             mint = uu.reshape( *mint.shape[:2], mint.shape[3], chi )
             mint = torch.permute(mint, (0, 1, 3, 2))
@@ -565,9 +557,6 @@ class NoisyCombTNDevice(nn.Module):
                 two_tens, matrix,
                 ([1, 3], [2, 3])
             ).permute(0, 4, 1, 5, 2, 3).reshape(np.prod(mint.shape[:2]), -1)
-            #uu, ss, vv, _ = svd_decomposition(
-            #    two_tens, tol=self.ctol, max_rank=self.cmbd
-            #)
             uu, ss, vv = svd_decomposition(two_tens, self.cmbd, rel_tol=self.ctol)
             vv = vv.T.conj()
             ss = ss.to(vv.dtype)
@@ -576,7 +565,6 @@ class NoisyCombTNDevice(nn.Module):
             else:
                 uu = torch.matmul(uu, torch.diag(ss))
                 rr = vv
-            #uu, rr = torch.linalg.qr(two_tens)
             chi = uu.shape[1]
             mint = uu.reshape((*mint.shape[:2], chi))
             maxt = rr.reshape((chi, *maxt.shape[1:]))

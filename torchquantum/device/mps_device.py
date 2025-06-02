@@ -96,7 +96,7 @@ class MPSDevice(nn.Module):
 
     def get_states_1d(self):
         """Return the states in a 1d tensor."""
-        tens = torch.squeeze(self[0], dim=(0, 3))
+        tens = torch.squeeze(self[0], dim=0)
         for ii in range(1, self.n_wires):
             tens = torch.tensordot(
                 tens, self[ii], ([-1], [0])
@@ -162,7 +162,7 @@ class MPSDevice(nn.Module):
         return val, prob.detach().item()
 
     def overlap(self, other):
-        tm = torch.ones((1, 1))
+        tm = torch.ones((1, 1), dtype=self.dtype)
         for ii in range(self.n_wires):
             tm = torch.tensordot(
                 tm, self[ii], ([0], [0])
@@ -188,7 +188,7 @@ class MPSDevice(nn.Module):
 
                 tmp = torch.unsqueeze(tens, 0)
                 mat = torch.tensordot(
-                    tmp, tmp, ([0], [0])
+                    tmp, tmp.conj(), ([0], [0])
                 ).permute(0, 3, 1, 4, 2, 5).reshape(tens.shape[0]**2*4, -1)
 
                 if ii < self.n_wires-1:
@@ -263,10 +263,7 @@ class MPSDevice(nn.Module):
             matrix,
             ([1], [1])
         )
-        if state.ndim == 3:
-            state = torch.permute(state, [0, 2, 1])
-        elif state.ndim == 4:
-            state = torch.permute(state, [0, 3, 1, 2])
+        state = torch.permute(state, [0, 2, 1])
         self[wires] = state
 
     def _apply_two_sites_operator(self, idx, jdx, matrix, dirc="R"):
@@ -344,7 +341,6 @@ class MPSDevice(nn.Module):
 
         # Apply swaps to bring qubits adjacents
         if np.abs(idx - jdx)>1:
-
             for q1 in range(min(qubits), max(qubits)-1):
                 self.swap(q1, q1+1, dirc="R")
 

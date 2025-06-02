@@ -56,6 +56,7 @@ from .xx_plus_yy import XXPLUSYY
 from .sun import SU2, SU4
 from .u1q import U1q
 from .depolarizing import DP1, DP2
+from .tk import TK1, TK2
 
 _all_variables = [
     EchoedCrossResonance,
@@ -166,6 +167,8 @@ op_name_dict.update(
         "u1q": U1q,
         "dp1": DP1,
         "dp2": DP2,
+        "tk1": TK1,
+        "tk2": TK2,
     }
 )
 
