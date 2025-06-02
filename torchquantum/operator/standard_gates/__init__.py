@@ -38,8 +38,8 @@ from .r import R
 from .reset import Reset
 from .rot import Rot, CRot
 from .rx import RX, RXX, CRX
-from .ry import RY, RYY, CRY
-from .rz import RZ, MultiRZ, RZZ, RZX, CRZ
+from .ry import RY, RYY, CRY, NCRY
+from .rz import RZ, MultiRZ, RZZ, RZX, CRZ, NRZZ
 from .toffoli import Toffoli, CCX, RC3X, RCCX
 from .qubit_unitary import QubitUnitary, QubitUnitaryFast
 from .trainable_unitary import TrainableUnitary, TrainableUnitaryStrict
@@ -53,8 +53,12 @@ from .u2 import U2, CU2
 from .u3 import U3, CU3, CU, U
 from .xx_min_yy import XXMINYY
 from .xx_plus_yy import XXPLUSYY
+from .sun import SU2, SU4
+from .u1q import U1q
+from .depolarizing import DP1, DP2
+from .tk import TK1, TK2
 
-all_variables = [
+_all_variables = [
     EchoedCrossResonance,
     ECR,
     GlobalPhase,
@@ -90,9 +94,11 @@ all_variables = [
     RY,
     RYY,
     CRY,
+    NCRY,
     RZ,
     MultiRZ,
     RZZ,
+    NRZZ,
     RZX,
     CRZ,
     Toffoli,
@@ -101,6 +107,8 @@ all_variables = [
     RCCX,
     S,
     SDG,
+    SU2,
+    SU4,
     CS,
     CSDG,
     SingleExcitation,
@@ -115,6 +123,7 @@ all_variables = [
     TDG,
     TrainableUnitary,
     TrainableUnitaryStrict,
+    U1q,
     U1,
     CU1,
     U2,
@@ -125,18 +134,12 @@ all_variables = [
     U,
     XXMINYY,
     XXPLUSYY,
+    DP1,
+    DP2,
 ]
 
-__all__ = [a().__class__.__name__ for a in all_variables]
-
-# add the aliased and incomptaible classes
-__all__.extend(["U", "CH", "QubitUnitary", "QubitUnitaryFast"])
-
-# add the dictionary
-__all__.extend(["op_name_dict", "fixed_ops", "parameterized_ops"])
-
 # create the operations dictionary
-op_name_dict = {x.op_name: x for x in all_variables}
+op_name_dict = {_x.op_name: _x for _x in _all_variables}
 
 # add aliases as well
 op_name_dict.update(
@@ -153,13 +156,22 @@ op_name_dict.update(
         "xx": RXX,
         "yy": RYY,
         "zz": RZZ,
+        "nrzz": NRZZ,
         "zx": RZX,
         "ccx": Toffoli,
         "p": U1,
         "cp": CU1,
         "cr": CU1,
+        "su2": SU2,
+        "su4": SU4,
+        "u1q": U1q,
+        "dp1": DP1,
+        "dp2": DP2,
+        "tk1": TK1,
+        "tk2": TK2,
     }
 )
 
-fixed_ops = [a().__class__.__name__ for a in all_variables if a.num_params == 0]
-parameterized_ops = [a().__class__.__name__ for a in all_variables if a.num_params > 0]
+# TODO: make this compatible with aliases
+fixed_ops = [_a().__class__.__name__ for _a in _all_variables if _a.num_params == 0]
+parameterized_ops = [_a().__class__.__name__ for _a in _all_variables if _a.num_params > 0]

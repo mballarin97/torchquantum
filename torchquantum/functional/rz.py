@@ -79,6 +79,46 @@ def rzz_matrix(params):
 
     return matrix.squeeze(0)
 
+def noisy_rzz_matrix(params):
+    """Compute unitary matrix for RZZ gate.
+
+    Args:
+        params (torch.Tensor): The rotation angle.
+
+    Returns:
+        torch.Tensor: The computed unitary matrix.
+
+    """
+    theta = params.type(C_DTYPE)
+    theta = params.type(F_DTYPE)
+    errangle = torch.abs(theta)/np.pi
+    if errangle % 1 == 0:
+        errangle = torch.ones_like(errangle)
+    else:
+        errangle = errangle % 1
+    if errangle > 0.5:
+        errangle = 1 - errangle
+
+    exp = torch.exp(-0.5j * theta)
+    conj_exp = torch.conj(exp)
+
+    matrix = (
+        torch.tensor(
+            [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]],
+            dtype=C_DTYPE,
+            device=params.device,
+        )
+        .unsqueeze(0)
+        .repeat(exp.shape[0], 1, 1)
+    )
+
+    matrix[:, 0, 0] = exp[:, 0]
+    matrix[:, 1, 1] = conj_exp[:, 0]
+    matrix[:, 2, 2] = conj_exp[:, 0]
+    matrix[:, 3, 3] = exp[:, 0]
+
+    return [matrix.squeeze(0), errangle]
+
 
 def rzx_matrix(params):
     """Compute unitary matrix for RZX gate.
@@ -175,6 +215,7 @@ _rz_mat_dict = {
     "multirz": multirz_matrix,
     "rz": rz_matrix,
     "rzz": rzz_matrix,
+    "nrzz": noisy_rzz_matrix,
     "crz": crz_matrix,
     "rzx": rzx_matrix,
 }
@@ -219,6 +260,7 @@ def multirz(
         method=comp_method,
         q_device=q_device,
         wires=wires,
+        paramnum=1,
         params=params,
         n_wires=n_wires,
         static=static,
@@ -266,6 +308,7 @@ def crz(
         method=comp_method,
         q_device=q_device,
         wires=wires,
+        paramnum=1,
         params=params,
         n_wires=n_wires,
         static=static,
@@ -313,6 +356,7 @@ def rz(
         method=comp_method,
         q_device=q_device,
         wires=wires,
+        paramnum=1,
         params=params,
         n_wires=n_wires,
         static=static,
@@ -360,6 +404,7 @@ def rzz(
         method=comp_method,
         q_device=q_device,
         wires=wires,
+        paramnum=1,
         params=params,
         n_wires=n_wires,
         static=static,
@@ -367,6 +412,53 @@ def rzz(
         inverse=inverse,
     )
 
+def noisy_rzz(
+    q_device,
+    wires,
+    params=None,
+    n_wires=None,
+    static=False,
+    parent_graph=None,
+    inverse=False,
+    comp_method="bmm",
+):
+    """Perform the rzz gate.
+
+    Args:
+        q_device (tq.QuantumDevice): The QuantumDevice.
+        wires (Union[List[int], int]): Which qubit(s) to apply the gate.
+        params (torch.Tensor, optional): Parameters (if any) of the gate.
+            Default to None.
+        n_wires (int, optional): Number of qubits the gate is applied to.
+            Default to None.
+        static (bool, optional): Whether use static mode computation.
+            Default to False.
+        parent_graph (tq.QuantumGraph, optional): Parent QuantumGraph of
+            current operation. Default to None.
+        inverse (bool, optional): Whether inverse the gate. Default to False.
+        comp_method (bool, optional): Use 'bmm' or 'einsum' method to perform
+        matrix vector multiplication. Default to 'bmm'.
+
+    Returns:
+        None.
+
+    """
+    name = "nrzz"
+    mat = _rz_mat_dict[name]
+
+    gate_wrapper(
+        name=name,
+        mat=mat,
+        method=comp_method,
+        q_device=q_device,
+        wires=wires,
+        paramnum=1,
+        params=params,
+        n_wires=n_wires,
+        static=static,
+        parent_graph=parent_graph,
+        inverse=inverse,
+    )
 
 def rzx(
     q_device,
@@ -407,6 +499,7 @@ def rzx(
         method=comp_method,
         q_device=q_device,
         wires=wires,
+        paramnum=1,
         params=params,
         n_wires=n_wires,
         static=static,

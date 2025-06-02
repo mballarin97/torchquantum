@@ -24,3 +24,5 @@ SOFTWARE.
 
 from .devices import *
 from .noisedevices import *
+from .combdevice import *
+from .noisy_combdevice import *

@@ -34,6 +34,7 @@ import numpy as np
 __all__ = [
     "OpHamilExp",
     "OpPauliExp",
+    "SUN",
 ]
 
 
@@ -140,6 +141,74 @@ class OpPauliExp(OpHamilExp):
                     "inverse": False,
                     "trainable": self.trainable,
                     "params": self.theta.item(),
+                }
+            )
+
+        tqf.qubitunitaryfast(
+            q_device=qdev,
+            wires=wires,
+            params=matrix,
+        )
+
+class SUN(OpHamilExp):
+    def __init__(
+        self,
+        has_params : bool,
+        init_params: List[float],
+        n_wires:int,
+        wires:int,
+        paulis: List[str],
+        trainable: bool = True,
+    ):
+        """Initialize the OpPauliExp module.
+
+        Args:
+            coeffs: The coefficients of the Hamiltonian.
+            paulis: The operators of the Hamiltonian, described in strings.
+            endianness: The endianness of the operators. Default is big. Qubit 0 is the most significant bit.
+            trainable: Whether the parameters are trainable.
+            theta: The initial value of theta.
+
+        """
+
+        if trainable:
+            self.coeffs = torch.nn.parameter.Parameter(torch.tensor(coeffs))
+        else:
+            self.coeffs = coeffs
+        self.theta = 1.0
+        self.paulis = paulis
+        self.trainable = trainable
+        self.name = "sun"
+
+    @property
+    def hamil(self):
+        num_sites = int(np.sqrt(np.ceil(np.log2(len(self.coeffs)))) )
+        pauli_str = ["I", "X", "Y", "Z"]
+        paulis = []
+        for ii in range(1, 4**num_sites):
+            idxs = np.unravel_index( ii, [4]*num_sites )
+            ps = pauli_str[idxs[0]]
+            for idx in idxs[1:]:
+                ps += pauli_str[idx]
+            paulis.append(ps)
+        return Hamiltonian(self.coeffs, paulis)
+
+    def forward(self, qdev, wires):
+        """Forward the OpHamilExp module.
+        Args:
+            qdev: The QuantumDevice.
+            wires: The wires.
+
+        """
+        matrix = self.matrix.to(qdev.device)
+        if qdev.record_op:
+            qdev.op_history.append(
+                {
+                    "name": self.name,  # type: ignore
+                    "wires": np.array(wires).squeeze().tolist(),
+                    "inverse": False,
+                    "trainable": self.trainable,
+                    "params": self.coeffs,
                 }
             )
 

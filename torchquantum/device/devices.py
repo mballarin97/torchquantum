@@ -42,6 +42,7 @@ class QuantumDevice(nn.Module):
         bsz: int = 1,
         device: Union[torch.device, str] = "cpu",
         record_op: bool = False,
+        initial_state = None
     ):
         """A quantum device that contains the quantum state vector.
         Args:
@@ -60,10 +61,14 @@ class QuantumDevice(nn.Module):
         self.device_name = device_name
         self.bsz = bsz
         self.device = device
+        self.dtype = C_DTYPE
 
-        _state = torch.zeros(2**self.n_wires, dtype=C_DTYPE)
-        _state[0] = 1 + 0j  # type: ignore
-        _state = torch.reshape(_state, [2] * self.n_wires).to(self.device)
+        if initial_state is None:
+            _state = torch.zeros(2**self.n_wires, dtype=C_DTYPE)
+            _state[0] = 1 + 0j  # type: ignore
+            _state = torch.reshape(_state, [2] * self.n_wires).to(self.device)
+        else:
+            _state = torch.reshape(initial_state, [2] * self.n_wires).to(self.device)
         self.register_buffer("state", _state)
 
         repeat_times = [bsz] + [1] * len(self.state.shape)  # type: ignore
@@ -99,6 +104,25 @@ class QuantumDevice(nn.Module):
             2**self.n_wires, device=self.state.device, dtype=C_DTYPE
         ).reshape([2**self.n_wires] + [2] * self.n_wires)
 
+    def evaluate(self, point):
+        """
+        Return the quantum circuit on a given point
+
+        Parameters
+        ----------
+        point : np.ndarray[int]
+
+        Returns
+        -------
+        float
+        """
+        idx = np.ravel_multi_index(point, [2] * len(point))
+        return self.get_states_1d()[idx].item()
+
+    def overlap(self, other):
+        other = other.to(self.dtype)
+        return torch.vdot(self.get_states_1d(), other)
+
     def reset_all_eq_states(self, bsz: int):
         """Make the states as the equal superposition state, one dim is the
         batch dim. Useful for verification.
@@ -114,7 +138,7 @@ class QuantumDevice(nn.Module):
     def get_states_1d(self):
         """Return the states in a 1d tensor."""
         bsz = self.states.shape[0]
-        return torch.reshape(self.states, [bsz, 2**self.n_wires])
+        return torch.reshape(self.states, [bsz, 2**self.n_wires]).reshape(-1)
 
     def get_state_1d(self):
         """Return the state in a 1d tensor."""

@@ -25,10 +25,11 @@ SOFTWARE.
 from .gate_wrapper import gate_wrapper, apply_unitary_einsum, apply_unitary_bmm
 from .hadamard import hadamard, shadamard, _hadamard_mat_dict, h, ch, sh, chadamard
 from .rx import rx, rxx, crx, xx, _rx_mat_dict, rx_matrix, rxx_matrix, crx_matrix
-from .ry import ry, ryy, cry, yy, _ry_mat_dict, ry_matrix, ryy_matrix, cry_matrix
+from .ry import ry, ryy, cry, yy, _ry_mat_dict, ry_matrix, ryy_matrix, cry_matrix,noisy_cry, noisy_cry_matrix
 from .rz import (
     rz,
     rzz,
+    noisy_rzz,
     crz,
     zz,
     zx,
@@ -93,6 +94,10 @@ from .s import _s_mat_dict, s, sdg, cs, csdg
 from .t import _t_mat_dict, t, tdg
 from .swap import _swap_mat_dict, swap, sswap, iswap, cswap
 from .ecr import _ecr_mat_dict, ecr, echoedcrossresonance
+from .sun import su2, su4, su2_matrix, su4_matrix, _sun_mat_dict
+from .u1q import u1q, u1q_matrix, _u1q_mat_dict
+from .depolarizing import dp1, dp2, dp1_matrix, dp2_matrix, _dp_mat_dict
+from .tk import tk1, tk1_matrix, tk2, tk2_matrix, _tk_mat_dict
 
 mat_dict = {
     **_hadamard_mat_dict,
@@ -120,6 +125,10 @@ mat_dict = {
     **_t_mat_dict,
     **_swap_mat_dict,
     **_ecr_mat_dict,
+    **_sun_mat_dict,
+    **_u1q_mat_dict,
+    **_dp_mat_dict,
+    **_tk_mat_dict
 }
 
 func_name_dict = {
@@ -158,6 +167,7 @@ func_name_dict = {
     "multirz": multirz,
     "crx": crx,
     "cry": cry,
+    "ncry": noisy_cry,
     "crz": crz,
     "crot": crot,
     "u1": u1,
@@ -207,6 +217,13 @@ func_name_dict = {
     "rccx": rccx,
     "rc3x": rc3x,
     "c4x": c4x,
+    "su2": su2,
+    "su4": su4,
+    "u1q": u1q,
+    "dp1": dp1,
+    "dp2": dp2,
+    "tk1": tk1,
+    "tk2": tk2,
 }
 
 from .func_mat_exp import matrix_exp
